@@ -2,6 +2,7 @@ package com.example.controller;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
@@ -15,37 +16,44 @@ import com.example.DocumentSimilarityReducer;
  *
  * Usage:  hadoop jar DocumentSimilarity-0.0.1-SNAPSHOT.jar \
  *             com.example.controller.DocumentSimilarityDriver <input path> <output path>
- *
- * Compare with Controller.java from Hands-on L4: the structure is the same. Things to think
- * about that were not an issue in L4:
- *
- *   - Number of reducers. With the design suggested in README.md every document must end up
- *     in the SAME reducer, so the job needs exactly one:  job.setNumReduceTasks(1).
- *
- *   - Output separator. TextOutputFormat writes "key<TAB>value". The required output has a
- *     single space between the pair and the word "Similarity", so either put the whole line
- *     in the key and emit NullWritable as the value, or tell Hadoop to use a space:
- *         conf.set("mapreduce.output.textoutputformat.separator", " ");
- *     (this must be set on the Configuration BEFORE Job.getInstance is called).
- *
- *   - No combiner. A combiner only makes sense when the reduce function is associative and
- *     commutative on the mapper's output. Think about whether that is true for your design;
- *     with the suggested one, it is not.
  */
 public class DocumentSimilarityDriver {
 
     public static void main(String[] args) throws Exception {
+
         if (args.length != 2) {
-            System.err.println("Usage: DocumentSimilarityDriver <input path> <output path>");
+            System.err.println(
+                "Usage: DocumentSimilarityDriver <input path> <output path>"
+            );
             System.exit(2);
         }
 
         Configuration conf = new Configuration();
-        // TODO: configure the job — see the class comment above and Controller.java from L4.
+
         Job job = Job.getInstance(conf, "document similarity");
 
+        // Tell Hadoop which class contains the main() method
+        job.setJarByClass(DocumentSimilarityDriver.class);
+
+        // Set Mapper and Reducer
+        job.setMapperClass(DocumentSimilarityMapper.class);
+        job.setReducerClass(DocumentSimilarityReducer.class);
+
+        // Design A requires exactly one reducer
+        job.setNumReduceTasks(1);
+
+        // Mapper output types
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(Text.class);
+
+        // Final output types
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(NullWritable.class);
+
+        // Input and output paths
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
